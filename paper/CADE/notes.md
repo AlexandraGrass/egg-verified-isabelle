@@ -1,4 +1,0 @@
-- Weird proof proof
-- Literature of verified algorithms and data structures*s*
-- pre_digraph.lca instead of just lca
-- nat_rel
