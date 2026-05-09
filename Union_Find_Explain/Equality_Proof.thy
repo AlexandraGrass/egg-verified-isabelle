@@ -2,6 +2,8 @@ theory Equality_Proof
   imports Main
 begin
 
+subsection \<open>Symmetric and Equivalence Closure of a Relation\<close>
+
 definition symcl :: "'a rel \<Rightarrow> 'a rel" where "symcl r \<equiv> r \<union> r\<inverse>"
 
 definition equivcl :: "'a rel \<Rightarrow> 'a rel" where "equivcl r \<equiv> (symcl r)\<^sup>*"
@@ -39,6 +41,8 @@ lemma refl_in_equivcl[simp, intro!]:
   "(x, x) \<in> equivcl r"
   unfolding equivcl_def by simp
 
+subsection \<open>Proofs (Explanations) of Equivalence\<close>
+
 datatype 'a eq_prf = AssmP nat | ReflP 'a | TransP "'a eq_prf" "'a eq_prf" | SymP "'a eq_prf"
 
 inductive proves_eq :: "('a \<times> 'a) list \<Rightarrow> 'a eq_prf \<Rightarrow> ('a \<times> 'a) \<Rightarrow> bool" ("_ \<turnstile>\<^sub>= _ : _" [60,0,60] 60) where
@@ -69,6 +73,8 @@ next
     by (intro proves_eq.sym) auto
 qed
 
+text \<open>If x = y is in the equivalence closure of the relation as, then there exists a proof for it.\<close>
+
 lemma proves_eq_complete:
   assumes "(x, y) \<in> equivcl (set as)"
   shows "\<exists>p. as \<turnstile>\<^sub>= p : (x, y)"
@@ -96,6 +102,8 @@ next
       by fast
   qed
 qed
+
+text \<open>If there is a proof showing x = y, then x = y is actually in the equivalence closure of as.\<close>
 
 lemma proves_eq_sound:
   assumes "as \<turnstile>\<^sub>= p : (x, y)"

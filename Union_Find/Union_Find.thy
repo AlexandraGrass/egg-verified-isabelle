@@ -2,6 +2,8 @@ theory Union_Find
   imports Collections.Partial_Equivalence_Relation
 begin
 
+section \<open>Helper lemmas\<close>
+
 lemma Field_per_union[simp]:
   "Field (per_union r x y) = Field r"
   unfolding Field_def per_union_def by blast
@@ -10,6 +12,10 @@ lemma mono_per_union[simp]:
   assumes "p \<in> r"
   shows "p \<in> per_union r x y"
   using assms unfolding per_union_def by simp
+
+section \<open>datatype ufa\<close>
+
+subsection \<open>rep_of and ufa_invar\<close>
 
 function (domintros) rep_of 
   where "rep_of uf i = (let pi = uf ! i in if pi = i then i else rep_of uf pi)"
@@ -23,6 +29,18 @@ lemma ufa_invarD:
   shows "rep_of_dom (uf, i)" "uf ! i < length uf"
   using assms unfolding ufa_invar_def by blast+
 
+lemma rep_of_lt_lengthI[simp, intro]:
+  assumes "ufa_invar uf" "x < length uf"
+  shows "rep_of uf x < length uf"
+  using ufa_invarD(1)[OF assms] assms
+  by (induction rule: rep_of.pinduct) (auto simp: rep_of.psimps Let_def ufa_invarD(2))
+
+lemma nth_rep_of_eq_rep_of:
+  assumes "ufa_invar uf" "x < length uf"
+  shows "uf ! rep_of uf x = rep_of uf x"
+  using ufa_invarD(1)[OF assms] assms
+  by (induction rule: rep_of.pinduct) (auto simp: rep_of.psimps Let_def ufa_invarD(2))
+
 typedef ufa = "{uf. ufa_invar uf}"
 proof -
   have "ufa_invar []"
@@ -31,7 +49,11 @@ proof -
     by blast
 qed
 
+subsection \<open>Lifted definitions\<close>
+
 setup_lifting type_definition_ufa
+
+subsubsection \<open>\<alpha>\<close>
 
 context
 begin
@@ -51,69 +73,11 @@ lemma in_\<alpha>E[elim]:
   obtains "x < length uf" "y < length uf" "rep_of uf x = rep_of uf y"
   using assms unfolding \<alpha>_def by blast+
 
-lemma rep_of_lt_lengthI[simp, intro]:
-  assumes "ufa_invar uf" "x < length uf"
-  shows "rep_of uf x < length uf"
-  using ufa_invarD(1)[OF assms] assms
-  by (induction rule: rep_of.pinduct) (auto simp: rep_of.psimps Let_def ufa_invarD(2))
-
-lemma nth_rep_of_eq_rep_of:
-  assumes "ufa_invar uf" "x < length uf"
-  shows "uf ! rep_of uf x = rep_of uf x"
-  using ufa_invarD(1)[OF assms] assms
-  by (induction rule: rep_of.pinduct) (auto simp: rep_of.psimps Let_def ufa_invarD(2))
-
-lemma rep_of_dom_list_update_rep_of:
-  assumes "ufa_invar uf" "x < length uf" "y < length uf"
-  assumes "i < length uf"
-  shows "rep_of_dom (uf[x := rep_of uf y], i)"
-proof -
-  from assms have "rep_of_dom (uf, i)"
-    using ufa_invarD by simp
-  then show ?thesis
-    using assms
-  proof(induction rule: rep_of.pinduct)
-    case (1 uf i)
-    note [intro!] =
-      rep_of.domintros[where i=i]
-      rep_of.domintros[where i="rep_of uf y" for uf]
-    from 1 show ?case
-      using nth_list_update[OF \<open>x < length uf\<close>]
-      using nth_rep_of_eq_rep_of
-      by (auto dest: ufa_invarD simp: ufa_invarD(2))
-  qed
-qed
-
-lemma ufa_invar_list_update_rep_of:
-  assumes "ufa_invar uf"
-  assumes "x < length uf" "y < length uf"
-  shows "ufa_invar (uf[x := rep_of uf y])"
-proof -
-  from assms have "rep_of uf y < length uf"
-    by blast+
-  with rep_of_dom_list_update_rep_of show ?thesis
-    using assms unfolding ufa_invar_def by (auto simp: nth_list_update)
-qed
-
-lemma ufa_invar_list_update:
-  assumes "ufa_invar uf"
-  assumes "x < length uf" "y < length uf"
-  assumes "uf ! y = y"
-  shows "ufa_invar (uf[x := y])"
-proof -
-  from assms have "rep_of uf y = y"
-    by (simp add: ufa_invarD rep_of.psimps)
-  with ufa_invar_list_update_rep_of[OF assms(1-3)] show ?thesis
-    by simp
-qed
-
 end
 
+subsubsection \<open>ufa_\<alpha>\<close>
+
 lift_definition ufa_\<alpha> :: "ufa \<Rightarrow> nat rel" is Union_Find.\<alpha> .
-
-lift_definition ufa_parent_of :: "ufa \<Rightarrow> nat \<Rightarrow> nat" is "\<lambda>uf i. uf ! i" .
-
-lift_definition ufa_rep_of :: "ufa \<Rightarrow> nat \<Rightarrow> nat" is rep_of .
 
 lemma part_equiv_ufa_\<alpha>: "part_equiv (ufa_\<alpha> uf)"
   by (transfer, rule part_equivI) (auto simp: Union_Find.\<alpha>_def intro: symI transI)
@@ -125,6 +89,19 @@ lemma equiv_Field_ufa_\<alpha>_ufa_\<alpha>:
 lemma finite_Field_ufa_\<alpha>: "finite (Field (ufa_\<alpha> uf))"
   by transfer (meson Field_\<alpha> bounded_nat_set_is_finite)
 
+subsubsection \<open>ufa_parent_of\<close>
+
+lift_definition ufa_parent_of :: "ufa \<Rightarrow> nat \<Rightarrow> nat" is "(\<lambda>uf i. uf ! i) :: 'a list \<Rightarrow> nat \<Rightarrow> 'a" .
+
+lemma ufa_parent_of_in_Field_ufa_\<alpha>I[simp, intro]:
+  assumes "i \<in> Field (ufa_\<alpha> uf)"
+  shows "ufa_parent_of uf i \<in> Field (ufa_\<alpha> uf)"
+  using assms by transfer (auto simp: ufa_invar_def)
+
+subsubsection \<open>ufa_rep_of\<close>
+
+lift_definition ufa_rep_of :: "ufa \<Rightarrow> nat \<Rightarrow> nat" is rep_of .
+
 lemma ufa_\<alpha>I:
   assumes "x \<in> Field (ufa_\<alpha> uf)" "y \<in> Field (ufa_\<alpha> uf)" "ufa_rep_of uf x = ufa_rep_of uf y"
   shows "(x, y) \<in> ufa_\<alpha> uf"
@@ -135,11 +112,6 @@ lemma ufa_rep_of_eq_if_in_ufa_\<alpha>:
   assumes "(x, y) \<in> ufa_\<alpha> uf"
   shows "ufa_rep_of uf x = ufa_rep_of uf y"
   using assms by transfer blast
-
-lemma ufa_parent_of_in_Field_ufa_\<alpha>I[simp, intro]:
-  assumes "i \<in> Field (ufa_\<alpha> uf)"
-  shows "ufa_parent_of uf i \<in> Field (ufa_\<alpha> uf)"
-  using assms by transfer (auto simp: ufa_invar_def)
 
 lemma ufa_rep_of_simp:
   assumes "i \<in> Field (ufa_\<alpha> uf)"
@@ -219,7 +191,9 @@ lemma ufa_rep_of_eq_iff_in_ufa_\<alpha>:
   shows "ufa_rep_of uf x = ufa_rep_of uf y \<longleftrightarrow> (x, y) \<in> ufa_\<alpha> uf"
   using assms ufa_rep_of_eq_if_in_ufa_\<alpha> ufa_\<alpha>I by blast
 
-lift_definition ufa_init :: "nat \<Rightarrow> ufa" is "\<lambda>n. [0..<n]"
+subsubsection \<open>ufa_init\<close>
+
+lift_definition ufa_init :: "nat \<Rightarrow> ufa" is "(\<lambda>n. [0..<n]) :: nat \<Rightarrow> nat list"
   by (auto simp: ufa_invar_def intro: rep_of.domintros)
 
 lemma Field_ufa_\<alpha>_ufa_init[simp]: "Field (ufa_\<alpha> (ufa_init n)) = {0..<n}"
@@ -237,6 +211,52 @@ lemma rep_of_upt:
 
 lemma ufa_\<alpha>_ufa_init: "ufa_\<alpha> (ufa_init n) = {(x, x) |x. x < n}"
   by transfer (auto simp: Union_Find.\<alpha>_def rep_of_upt)
+
+subsubsection \<open>ufa_union\<close>
+
+lemma rep_of_dom_list_update_rep_of:
+  assumes "ufa_invar uf" "x < length uf" "y < length uf"
+  assumes "i < length uf"
+  shows "rep_of_dom (uf[x := rep_of uf y], i)"
+proof -
+  from assms have "rep_of_dom (uf, i)"
+    using ufa_invarD by simp
+  then show ?thesis
+    using assms
+  proof(induction rule: rep_of.pinduct)
+    case (1 uf i)
+    note [intro!] =
+      rep_of.domintros[where i=i]
+      rep_of.domintros[where i="rep_of uf y" for uf]
+    from 1 show ?case
+      using nth_list_update[OF \<open>x < length uf\<close>]
+      using nth_rep_of_eq_rep_of
+      by (auto dest: ufa_invarD simp: ufa_invarD(2))
+  qed
+qed
+
+lemma ufa_invar_list_update_rep_of:
+  assumes "ufa_invar uf"
+  assumes "x < length uf" "y < length uf"
+  shows "ufa_invar (uf[x := rep_of uf y])"
+proof -
+  from assms have "rep_of uf y < length uf"
+    by blast+
+  with rep_of_dom_list_update_rep_of show ?thesis
+    using assms unfolding ufa_invar_def by (auto simp: nth_list_update)
+qed
+
+lemma ufa_invar_list_update:
+  assumes "ufa_invar uf"
+  assumes "x < length uf" "y < length uf"
+  assumes "uf ! y = y"
+  shows "ufa_invar (uf[x := y])"
+proof -
+  from assms have "rep_of uf y = y"
+    by (simp add: ufa_invarD rep_of.psimps)
+  with ufa_invar_list_update_rep_of[OF assms(1-3)] show ?thesis
+    by simp
+qed
 
 lift_definition ufa_union :: "ufa \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> ufa" is
   "\<lambda>uf x y. if x < length uf \<and> y < length uf then uf[rep_of uf x := rep_of uf y] else uf"
@@ -328,6 +348,8 @@ lemma ufa_\<alpha>_ufa_union_eq_per_union_ufa_\<alpha>[simp]:
   using ufa_rep_of_ufa_union
   by transfer (auto elim!: in_\<alpha>E intro!: in_\<alpha>I split: if_splits)
 
+subsubsection \<open>ufa_compress\<close>
+
 lift_definition ufa_compress :: "ufa \<Rightarrow> nat \<Rightarrow> ufa" is 
   "\<lambda>uf x. if x < length uf then uf[x := rep_of uf x] else uf"
   by (auto intro!: ufa_invar_list_update_rep_of)
@@ -390,6 +412,8 @@ proof -
   with assms show ?thesis
     by transfer (simp add: list_update_same_conv nth_rep_of_eq_rep_of)
 qed
+
+section \<open>Relating ufa and equivalence classes\<close>
 
 definition "ufa_eq_class uf i \<equiv> ufa_\<alpha> uf `` {i}"
 

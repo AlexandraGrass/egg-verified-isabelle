@@ -4,6 +4,10 @@ theory Explain_Simple
     "Equality_Proof"
 begin
 
+section \<open>Effective unions\<close>
+
+text \<open>Given a union-find uf and a list of unions, @term\<open>ufa_unions\<close> applies all unions on uf.\<close>
+
 definition "ufa_unions \<equiv> foldl (\<lambda>uf (x, y). ufa_union uf x y)"
 
 lemma
@@ -15,10 +19,15 @@ lemma ufa_unions_append:
   "ufa_unions uf (us1 @ us2) = ufa_unions (ufa_unions uf us1) us2"
   by (induction us1 arbitrary: uf) simp_all
 
+text \<open>Effective unions are unions that join two valid indices and are not redundant with respect to
+      to previous unions.\<close>
+
 definition "valid_union uf a b \<equiv> a \<in> Field (ufa_\<alpha> uf) \<and> b \<in> Field (ufa_\<alpha> uf)"
 
 definition "eff_union uf a b \<equiv> 
   valid_union uf a b \<and> ufa_rep_of uf a \<noteq> ufa_rep_of uf b"
+
+subsection \<open>Helper lemmas for @term\<open>valid_union\<close>\<close>
 
 lemma valid_unionI[intro]:
   assumes "a \<in> Field (ufa_\<alpha> uf)" "b \<in> Field (ufa_\<alpha> uf)"
@@ -57,6 +66,8 @@ lemma subs_Field_if_valid_unions:
   shows "Field (set us) \<subseteq> Field (ufa_\<alpha> uf)"
   using assms unfolding valid_unions_def valid_union_def
   by (auto simp: Field_iff)
+
+subsection \<open>Helper lemmas for @term\<open>eff_union\<close>\<close>
 
 lemma eff_unionI[intro]:
   assumes "a \<in> Field (ufa_\<alpha> uf)" "b \<in> Field (ufa_\<alpha> uf)"
@@ -102,6 +113,8 @@ lemma valid_unions_if_eff_unions:
   by (induction uf us rule: eff_unions.induct) 
     (use Field_ufa_\<alpha>_ufa_union in \<open>(fastforce simp: valid_unions_def)+\<close>)
 
+subsection \<open>Domain of ids in valid and effective unions\<close>
+
 lemma in_Field_ufa_\<alpha>_if_in_eff_unions:
   assumes "eff_unions uf us"
   assumes "u \<in> set us"
@@ -119,9 +132,16 @@ lemma Field_ufa_\<alpha>_ufa_unions:
 lemmas Field_ufa_\<alpha>_ufa_unions_if_eff_unions[simp] =
   Field_ufa_\<alpha>_ufa_unions[OF valid_unions_if_eff_unions]
 
+section \<open>Union-Find-Explain as abstract datatype\<close>
+
+text \<open>An ufe consists of an ufa with just singleton equivalence classes (i.e. only reflexive eqs
+      x = x are represented) and a list of effective unions.\<close>
+
 typedef ufe = "{(ufa_init, us). ufa_\<alpha> ufa_init \<subseteq> Id \<and> eff_unions ufa_init us}"
   by (intro exI[where x="(ufa_init 0, [])"]) (auto simp: ufa_\<alpha>_ufa_init)
 setup_lifting type_definition_ufe
+
+subsection \<open>Access to the components of the data structure\<close>
 
 lift_definition uf_init_ds :: "ufe \<Rightarrow> ufa" is
   "\<lambda>(ufa_init, us). ufa_init" .
@@ -131,6 +151,8 @@ lift_definition unions :: "ufe \<Rightarrow> (nat \<times> nat) list" is
 
 lift_definition uf_ds :: "ufe \<Rightarrow> ufa" is
   "\<lambda>(ufa_init, us). ufa_unions ufa_init us" .
+
+subsection \<open>Operations on ufe\<close>
 
 abbreviation "ufe_rep_of ufe x \<equiv> ufa_rep_of (uf_ds ufe) x"
 abbreviation "ufe_parent_of ufe x \<equiv> ufa_parent_of (uf_ds ufe) x"
@@ -153,6 +175,9 @@ lift_definition ufe_union :: "ufe \<Rightarrow> nat \<Rightarrow> nat \<Rightarr
     if eff_unions ufa_init (us @ [(x, y)]) then (ufa_init, us @ [(x, y)])
     else (ufa_init, us)"
   by (auto split: if_splits)
+
+text \<open>@term\<open>rollback\<close> allows to remove the last union from the ufe data structure and is the dual to
+      @term\<open>ufe_union\<close>.\<close>
 
 lift_definition rollback :: "ufe \<Rightarrow> ufe" is
   "\<lambda>(ufa_init, us). (ufa_init, butlast us)"
@@ -251,6 +276,13 @@ qed
 lifting_update ufe.lifting
 lifting_forget ufe.lifting
 
+section \<open>Extracting Explanations\<close>
+
+text \<open>Associated unions: Annotate each edge of the ufe forest with the union that caused its
+creation. For a non-root node, the map will contain an entry (node \<mapsto> union index). Since every node
+only has one or less parent edges in the forest, this allows for a bijective association of unions
+to edges.\<close>
+
 function au_ds :: "ufe \<Rightarrow> (nat \<rightharpoonup> nat)" where
   "au_ds ufe =
     (if unions ufe = [] then Map.empty
@@ -258,7 +290,7 @@ function au_ds :: "ufe \<Rightarrow> (nat \<rightharpoonup> nat)" where
       let (x, y) = last (unions ufe); ufe0 = rollback ufe
       in (au_ds ufe0)(ufe_rep_of ufe0 x \<mapsto> length (unions ufe0)))"
   by auto
-termination 
+termination
   by (relation "measure (\<lambda>ufe. length (unions ufe))") simp_all
 
 declare au_ds.simps[simp del]
@@ -294,12 +326,16 @@ termination
 
 declare explain.simps[simp del]
 
+text \<open>@term\<open>explain_partial\<close> only returns an explanation for x and y in the same equivalence class.\<close>
+
 definition "explain_partial ufe x y \<equiv>
   if (x, y) \<in> equivcl (set (unions ufe)) then Some (explain ufe x y) else None"
 
 lemma explain_refl[simp]:
   "explain ufe x x = ReflP x"
   by (induction ufe rule: ufe_induct) (simp_all add: explain.simps)
+
+subsection \<open>Helper lemmas regarding relations\<close>
 
 lemma per_union_eq_trancl:
   assumes "part_equiv R"
@@ -338,6 +374,8 @@ next
     unfolding \<open>u = (a, b)\<close> symcl_def
     by (auto simp: Un_assoc inverse_insert_prod_eq trancl_insert2)
 qed
+
+subsection \<open>Relating equivalence relations with ufe\<close>
 
 lemma ufa_\<alpha>_ufa_unions:
   "ufa_\<alpha> (ufa_unions uf_init us) = foldl (\<lambda>R (x, y). per_union R x y) (ufa_\<alpha> uf_init) us"
@@ -463,6 +501,8 @@ lemma ufe_rep_of_neq_if_not_in_equivcl_unions:
   shows "ufe_rep_of ufe x \<noteq> ufe_rep_of ufe y"
   using assms in_equivcl_iff_eq_or_ufe_rep_of_eq by metis
 
+subsection \<open>Completeness and soundness of explain\<close>
+
 theorem explain_complete:
   assumes "(x, y) \<in> equivcl (set (unions ufe))"
   shows "unions ufe \<turnstile>\<^sub>= explain ufe x y : (x, y)"
@@ -536,11 +576,15 @@ next
   qed
 qed
 
+text \<open>Explain captures all positives.\<close>
+
 theorem explain_partial_sound:
   assumes "explain_partial ufe x y = Some p"
   shows "unions ufe \<turnstile>\<^sub>= p : (x, y)"
   using assms explain_complete unfolding explain_partial_def
   by (cases "(x, y) \<in> equivcl (set (unions ufe))") auto
+
+text \<open>Partial explain correctly discards non-explainable equalities.\<close>
 
 theorem explain_partial_complete:
   assumes "explain_partial ufe x y = None"
