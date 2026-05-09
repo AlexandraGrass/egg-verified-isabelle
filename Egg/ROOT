@@ -1,0 +1,8 @@
+session Egg = HOL +
+  sessions
+    Collections
+    Union_Find
+  theories
+    Base
+    RawEgg
+    AbstractEgg
