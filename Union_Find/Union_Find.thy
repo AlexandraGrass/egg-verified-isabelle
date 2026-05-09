@@ -212,6 +212,138 @@ lemma rep_of_upt:
 lemma ufa_\<alpha>_ufa_init: "ufa_\<alpha> (ufa_init n) = {(x, x) |x. x < n}"
   by transfer (auto simp: Union_Find.\<alpha>_def rep_of_upt)
 
+(************************************* Newly added definition *************************************)
+
+subsubsection \<open>ufa_extend\<close>
+
+lemma rep_of_dom_list_append:
+  assumes "ufa_invar uf" and "i < length uf"
+  shows "rep_of_dom (uf @ uf', i)"
+proof -
+  from assms have "rep_of_dom (uf, i)"
+    using ufa_invarD by simp
+  then show ?thesis
+    using assms
+  proof(induction rule: rep_of.pinduct)
+    case (1 uf i)
+    thus ?case
+      by (metis nth_append_left rep_of.domintros ufa_invarD(2))
+  qed
+qed
+
+lemma rep_of_list_append:
+  assumes "ufa_invar uf" and "i < length uf"
+  shows "rep_of (uf @ uf') i = rep_of uf i"
+proof -
+  from assms have "rep_of_dom (uf, i)"
+    using ufa_invarD by simp
+  then show ?thesis
+    using assms
+  proof(induction rule: rep_of.pinduct)
+    case (1 uf i)
+    have "rep_of_dom (uf @ uf', i)"
+      using rep_of_dom_list_append[OF 1(3,4)] .
+    with 1 show ?case
+      by (cases "uf ! i = i")
+         (auto simp: rep_of.psimps ufa_invar_def nth_append_left)
+  qed
+qed
+
+text \<open>This returns the ufa extended by another element that is only equivalent with itself,
+  plus its id.\<close>
+lift_definition ufa_extend :: "ufa \<Rightarrow> (nat \<times> ufa)" is
+  "\<lambda>uf. (length uf, uf @ [length uf])"
+  by (auto simp: ufa_invar_def less_Suc_eq nth_append_left rep_of_dom_list_append
+           intro: rep_of.domintros)
+
+lemma ufa_extend_new_id_is_new[simp]:
+  assumes "(id', ufa') = ufa_extend ufa"
+  shows "id' \<notin> Field (ufa_\<alpha> ufa)"
+  using assms by transfer simp
+
+lemma ufa_extend_new_id_in_Field_ufa_\<alpha>[simp]:
+  assumes "(id', ufa') = ufa_extend ufa"
+  shows "id' \<in> Field (ufa_\<alpha> ufa')"
+  using assms by transfer simp
+
+lemma ufa_extend_parent_of:
+  assumes "(id', ufa') = ufa_extend ufa"
+      and "i \<in> Field (ufa_\<alpha> ufa')"
+    shows "ufa_parent_of ufa' i = (if i = id' then id' else ufa_parent_of ufa i)"
+  using assms by transfer (simp add: nth_append_left)
+
+lemma ufa_extend_new_id_only_parent_of_new_id:
+  assumes "(id', ufa') = ufa_extend ufa"
+      and "i \<in> Field (ufa_\<alpha> ufa')"
+      and "ufa_parent_of ufa' i = id'"
+    shows "i = id'"
+  using assms by transfer (simp add: ufa_invar_def, metis less_Suc_eq nth_append_left not_less_eq)
+
+lemma ufa_extend_rep_of:
+  assumes "(id', ufa') = ufa_extend ufa"
+      and "i \<in> Field (ufa_\<alpha> ufa')"
+    shows "ufa_rep_of ufa' i = (if i = id' then id' else ufa_rep_of ufa i)"
+  by (cases "i = id'")
+     (use assms in \<open>(transfer, simp add: rep_of.psimps ufa_invar_def,
+                     transfer, simp add: rep_of_list_append)\<close>)
+
+lemma ufa_extend_new_id_only_rep_of_new_id:
+  assumes "(id', ufa') = ufa_extend ufa"
+      and "i \<in> Field (ufa_\<alpha> ufa')"
+      and "ufa_rep_of ufa' i = id'"
+    shows "i = id'"
+  using assms by transfer (simp, metis rep_of_list_append rep_of_lt_lengthI less_Suc_eq not_less_eq)
+
+lemma ufa_extend_new_id_equiv_to_itself [simp]:
+  assumes "(id', ufa') = ufa_extend ufa"
+    shows "(id', id') \<in> ufa_\<alpha> ufa'"
+  using ufa_extend_new_id_in_Field_ufa_\<alpha> ufa_rep_of_eq_iff_in_ufa_\<alpha> assms by blast
+
+lemma ufa_extend_new_id_only_equiv_to_itself_right:
+  assumes "(id', ufa') = ufa_extend ufa"
+      and "(i, id') \<in> ufa_\<alpha> ufa'"
+    shows "i = id'"
+  by (metis assms ufa_extend_rep_of ufa_rep_of_eq_iff_in_ufa_\<alpha> ufa_extend_new_id_only_rep_of_new_id
+        Field_iff)
+
+lemma ufa_extend_new_id_only_equiv_to_itself_left:
+  assumes "(id', ufa') = ufa_extend ufa"
+      and "(id', i) \<in> ufa_\<alpha> ufa'"
+    shows "i = id'"
+  by (meson assms part_equiv_sym part_equiv_ufa_\<alpha> ufa_extend_new_id_only_equiv_to_itself_right)
+
+lemma ufa_extend_new_id_refl_is_the_only_new_equivalence:
+  assumes "(id', ufa') = ufa_extend ufa"
+      and "(a, b) \<in> ufa_\<alpha> ufa'"
+      and "(a, b) \<notin> ufa_\<alpha> ufa"
+    shows "a = id'" and "b = id'"
+  subgoal
+    using assms ufa_extend_new_id_only_equiv_to_itself_right[OF assms(1), where ?i = a]
+    apply transfer using in_\<alpha>I less_Suc_eq rep_of_list_append by fastforce
+  subgoal
+    using \<open>a = id'\<close> assms ufa_extend_new_id_only_equiv_to_itself_left by force
+  done
+
+lemma ufa_extend_old_ids_remain_in_same_relation:
+  assumes "(id', ufa') = ufa_extend ufa"
+      and "(a, b) \<in> ufa_\<alpha> ufa"
+    shows "(a, b) \<in> ufa_\<alpha> ufa'"
+  using assms by transfer (auto simp: Union_Find.\<alpha>_def rep_of_list_append)
+
+lemma ufa_\<alpha>_ufa_extend_simp:
+  assumes "(id', ufa') = ufa_extend ufa"
+  shows "ufa_\<alpha> ufa' = insert (id', id') (ufa_\<alpha> ufa)"
+  using ufa_extend_old_ids_remain_in_same_relation[OF assms]
+        ufa_extend_new_id_refl_is_the_only_new_equivalence[OF assms]
+  by (auto intro: set_eqI simp: assms)
+
+lemma ufa_extend_new_Field_ufa_\<alpha>:
+  assumes "(id', ufa') = ufa_extend ufa"
+  shows "Field (ufa_\<alpha> ufa') = insert id' (Field (ufa_\<alpha> ufa))"
+  using assms ufa_\<alpha>_ufa_extend_simp by auto
+
+(*********************************** End newly added definition ***********************************)
+
 subsubsection \<open>ufa_union\<close>
 
 lemma rep_of_dom_list_update_rep_of:
