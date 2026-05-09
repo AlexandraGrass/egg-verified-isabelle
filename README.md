@@ -1,38 +1,39 @@
-# Formalisation of the Union-Find-Explain Algorithm
-This directory contains the supplementary material for the paper, i.e. the formalisation of the Union-Find-Explain algorithm in Isabelle/HOL.
-The formalisation is structured as follows:
+# Cracking egg: Towards Verified Equality Saturation
 
-- `Tree_Theory/`. We extend the `Graph_Theory` entry of the AFP with a definition of directed trees and forests. Furthermore, we define the least common ancestor in a graph.
-- `Union_Find/`. We formalise the basic Union-Find data structure including union-by-size and path compression. Additionally, we define a version of the data structure that encodes the size information more efficiently using a list of integers. The operations are the data structure are refined to Imperative HOL such that efficient imperative code can be exported.
-- `Union_Find_Explain/`. We formalise the Union-Find-Explain data structure by first formalising a simple, but inefficient, version of the explain operation and prove its soundness and completeness.
-    Then, we formalise the more complex recursive implementation from the original paper and show that it is extensionally equal to the simple version.
-    Finally, we refine the explain operation to Imperative HOL in order to be able to export efficient imperative code.
-- `paper/CADE`. This directory contains the Isabelle theories that produce the paper.
-- `performance`. This directory contains the files for generating the results of the benchmarking section. Execute `performance/bench.bash` to get the results.
+**Abstract.** We present initial work on formally verifying the core of the egg framework in Isabelle/HOL. The egg framework uses e-graphs to perform fast, extensible equality saturation. Congruence closure is a core technique in program analysis and program optimization, serving as a foundation for rewriting systems and enabling efficient reasoning in equational logic. Optimization techniques such as egg's deferred rebuilding mechanism, however, obscure the computation and thus reduce confidence in the results. In this work, we aim to provide a comprehensive, extensible formalization of egg's data structures and algorithms, with a focus on the correctness of deferred rebuilding. Ultimately, we seek to export a verified implementation to Standard ML, enabling trustworthy, executable equality saturation.
 
-## Prerequisites
-The formalisations uses Isabelle2025, which can be obtained from the [Isabelle website](https://isabelle.in.tum.de/).
+With this artifact, we provide the proof files accompanying our paper *Cracking egg: Towards Verified Equality Saturation*. The proofs have been machine-checked with Isabelle2025-2.
+
+## Structure and Content
+
+This artifact includes the following adapted and newly added files:
+
+- `UnionFind/Union_Find.thy`. The union-find data structure by Stevens and Ghidini, now augmented with an `extend` operation introducing new ids in an existing union-find instance.
+- `Egg/*.thy`. The Isabelle/HOL theory of egg, including
+    - `Base.thy`. In this file, we introduce the datatypes for e-nodes and terms. The raw type of an egg-style e-graph is defined as a 4-tuple. We then characterize the well-formedness of the raw e-graph datatype by introducing an invariant.
+    - `RawEgg.thy` (corresponds to subsection *3.1 Raw Implementation of egg* of our paper). Our formalization currently covers e-graph initialization and the `canonicalize`, `find`, and `add` operations. To properly define the operations, we introduce predicates regarding the well-formedness of parameters.
+    - `AbstractEgg.thy` (corresponds to subsection *3.2 egg as Abstract Datatype* of our paper). In this theory, previously defined operations and lemmas are lifted to the abstract datatype `'a egg`.
+- `Egg/minimal-egg/`. A minimal toy implementation of egg in python, intended as a playground for refining the algorithms now implemented in the Isabelle/HOL theory files.
+
+The proofs can be checked on the command line as well as viewed and checked in Isabelle's prover IDE `jedit`.
+
+## Running the Formalization
+
+### Prerequisites
+The formalization uses Isabelle2025-2, which can be obtained from the [Isabelle website](https://isabelle.in.tum.de/).
 Furthermore it relies on entries of the [*Archive of Formal Proofs* (AFP)](https://www.isa-afp.org), which can be obtained as described on the [download page](https://www.isa-afp.org/download/).
 
-## Running the Formalisation
-Let `$AFP` be the path you downloaded the AFP to.
-You can build the formalisation and the paper, which non-interactively checks all the proofs, by executing the command
-```
-$ isabelle build -d $AFP/thys -D . -v
-```
-After executing this command, the paper will be in `paper/CADE/build`.
-In order to export the code from the imperative specification to the file `Union_Find_Explain/export/UFE.ML`, execute
-```
-$ isabelle build -d $AFP/thys -d . -e Union_Find_Explain
-```
-You can browse the theories interactively with the following command.
-Here, we open the theory file that produces the paper so you directly see how the paper corresponds to the formalisation.
-Note that jEdit displays the buffer of the ROOT file by default so you need to switch to the buffer `Document.thy`.
-```
-$ isabelle jedit -d $AFP/thys -d . -R Tree_Theory paper/CADE/Document.thy
-```
-You can also browse the Isabelle theories as HTML files.
-To do this, execute the following command and open the directory that you see on the console with your browser.
-```
-$ isabelle build -d $AFP/thys -D . -o browser_info
-```
+### Checking the Proofs with Isabelle's Command Line Tool
+
+Let `$AFP` be the path you downloaded the AFP to. Run `isabelle build -d $AFP/thys -D . -v` from the artifact's root directory to build the formalization, which non-interactively checks all the proofs (this should take approximately 1 minute).
+
+### Checking the Proofs with Isabelle's Prover IDE `jedit`
+
+Let `$AFP` be the path you downloaded the AFP to. A theory file can be opened and checked in `jedit` by running `isabelle jedit -d .$AFP/thys -d . Egg/RawEgg.thy` from the artifacts root directory.
+
+The bar next to the scrollbar on the right of the file editor view indicates whether a file was successfully processed. A light red color indicates that these parts were not yet checked. To check the entire file, either scroll to the bottom of the file (you will recognize the light red bar following the movement) or open the side tab *Theories* and check the opened theory. Both methods will trigger the automatic check of the file.
+
+After the file was checked successfully, the bar next to the scrollbar should be plain gray indicating that no error was found.
+If you find dark red lines in that bar next, then the checking was not successful. The *Theories* view on the right side shows an overview of checked theories with a similar color highlighting.
+
+The *Sidekick* tab on the right gives an overview of the structure of a theory file. You can use it to jump to the section or lemma you are interested in.
